@@ -1,10 +1,9 @@
 import { type ActionFunctionArgs } from '@remix-run/node';
-import { StreamingTextResponse, parseStreamPart } from 'ai';
+// No Response helpers imported; use result.toTextStreamResponse() from ai@5.
 import { streamText } from '~/lib/.server/llm/stream-text';
 import { stripIndents } from '~/utils/stripIndent';
 
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+// no-op encoders needed anymore
 
 export async function action(args: ActionFunctionArgs) {
   return enhancerAction(args);
@@ -31,23 +30,8 @@ async function enhancerAction({ request }: ActionFunctionArgs) {
       ],
     );
 
-    const transformStream = new TransformStream({
-      transform(chunk, controller) {
-        const processedChunk = decoder
-          .decode(chunk)
-          .split('\n')
-          .filter((line) => line !== '')
-          .map(parseStreamPart)
-          .map((part) => part.value)
-          .join('');
-
-        controller.enqueue(encoder.encode(processedChunk));
-      },
-    });
-
-    const transformedStream = result.toAIStream().pipeThrough(transformStream);
-
-    return new StreamingTextResponse(transformedStream);
+    // In ai@5, use the built-in helper on the result:
+    return result.toTextStreamResponse();
   } catch (error) {
     console.log(error);
 

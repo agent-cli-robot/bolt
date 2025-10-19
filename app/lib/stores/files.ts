@@ -116,10 +116,72 @@ export class FilesStore {
   async #init() {
     const webcontainer = await this.#webcontainer;
 
-    webcontainer.internal.watchPaths(
-      { include: [`${WORK_DIR}/**`], exclude: ['**/node_modules', '.git'], includeContent: true },
-      bufferWatchEvents(100, this.#processEventBuffer.bind(this)),
-    );
+    // Prefer internal watchPaths when available; otherwise fall back to a best-effort initial scan.
+    const internal: any = (webcontainer as any).internal;
+    if (internal?.watchPaths) {
+      internal.watchPaths(
+        { include: [`${WORK_DIR}/**`], exclude: ['**/node_modules', '.git'], includeContent: true },
+        bufferWatchEvents(100, this.#processEventBuffer.bind(this)),
+      );
+    } else {
+      logger.warn('File watcher unavailable; performing initial filesystem scan');
+      try {
+        await this.#initialScan(webcontainer);
+      } catch (error) {
+        logger.error('Initial filesystem scan failed', error);
+      }
+    }
+  }
+
+  async #initialScan(webcontainer: WebContainer) {
+    await this.#scanDir(webcontainer, WORK_DIR);
+  }
+
+  async #scanDir(webcontainer: WebContainer, dir: string) {
+    let entries: any;
+    try {
+      // Try to get Dirent-like objects first
+      entries = await (webcontainer.fs as any).readdir(dir, { withFileTypes: true });
+    } catch {
+      try {
+        entries = await webcontainer.fs.readdir(dir);
+      } catch (error) {
+        logger.error('Failed to read directory', dir, error);
+        return;
+      }
+    }
+
+    const list: Array<string | { name: string; isDirectory?: () => boolean }> = Array.isArray(entries)
+      ? entries
+      : [];
+
+    for (const entry of list) {
+      const name = typeof entry === 'string' ? entry : entry.name;
+      const fullPath = nodePath.posix.join(dir, name);
+
+      let isDir = false;
+      if (typeof entry !== 'string' && typeof entry.isDirectory === 'function') {
+        isDir = entry.isDirectory();
+      } else {
+        // Fallback: try reading file; if it fails assume directory
+        try {
+          const buf = (await webcontainer.fs.readFile(fullPath)) as unknown as Uint8Array;
+          const isBinary = isBinaryFile(buf);
+          const content = isBinary ? '' : this.#decodeFileContent(buf);
+          this.files.setKey(fullPath, { type: 'file', content, isBinary });
+          this.#size++;
+          continue;
+        } catch {
+          isDir = true;
+        }
+      }
+
+      if (isDir) {
+        // Mark folder and traverse
+        this.files.setKey(fullPath, { type: 'folder' });
+        await this.#scanDir(webcontainer, fullPath);
+      }
+    }
   }
 
   #processEventBuffer(events: Array<[events: PathWatcherEvent[]]>) {
