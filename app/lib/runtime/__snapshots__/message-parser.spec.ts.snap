@@ -218,3 +218,19 @@ exports[`StreamingMessageParser > valid artifacts without actions > should corre
   "title": "Some title",
 }
 `;
+
+exports[`StreamingMessageParser > valid artifacts without actions > should correctly parse chunks and strip out bolt artifacts (7) > onArtifactClose 1`] = `
+{
+  "id": "artifact_1",
+  "messageId": "message_1",
+  "title": "Some title",
+}
+`;
+
+exports[`StreamingMessageParser > valid artifacts without actions > should correctly parse chunks and strip out bolt artifacts (7) > onArtifactOpen 1`] = `
+{
+  "id": "artifact_1",
+  "messageId": "message_1",
+  "title": "Some title",
+}
+`;
