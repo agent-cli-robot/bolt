@@ -164,7 +164,7 @@ export class StreamingMessageParser {
           if (potentialTag === ARTIFACT_TAG_OPEN) {
             const nextChar = input[j + 1];
 
-            if (nextChar && nextChar !== '>' && nextChar !== ' ') {
+            if (nextChar && nextChar !== '>' && !/\s/.test(nextChar)) {
               output += input.slice(i, j + 1);
               i = j + 1;
               break;
